@@ -10,7 +10,7 @@ test('local server serves all browser modules, blocks private source, and sets s
       child.once('exit', code => { clearTimeout(timeout); reject(new Error(`Server exited: ${code}`)); });
       child.stdout.on('data', data => { const match = String(data).match(/http:\/\/127\.0\.0\.1:\d+/); if (match) { clearTimeout(timeout); resolve(match[0]); } });
     });
-    for (const path of ['/', '/src/app.js', '/src/core.js', '/src/storage.js', '/src/i18n.js', '/src/capture.js', '/src/style.css', '/icon.svg']) {
+    for (const path of ['/', '/src/app.js', '/src/core.js', '/src/storage.js', '/src/i18n.js', '/src/capture.js', '/src/providers.js', '/src/style.css', '/src/theme.css', '/icon.svg']) {
       const response = await fetch(origin + path); assert.equal(response.status, 200, path);
       assert.equal(response.headers.get('x-content-type-options'), 'nosniff'); assert.match(response.headers.get('content-security-policy'), /object-src 'none'/);
     }

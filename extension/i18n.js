@@ -116,6 +116,20 @@ export const vi = {
   'Archive settings': 'Cài đặt lưu trữ', 'Automatically archive inactive conversations': 'Tự động lưu trữ hội thoại cũ'
 };
 Object.assign(vi, {
+  'New provider connections are experimental. Some DeepSeek/Grok layouts may be unsupported; complete account sync is not verified.': 'Kết nối nhà cung cấp mới đang thử nghiệm. Một số bố cục DeepSeek/Grok có thể chưa được hỗ trợ; chưa xác minh khả năng đồng bộ đủ tài khoản.',
+  'Some DeepSeek/Grok layouts may be unsupported. If capture stops, keep JSON import as a fallback.': 'Một số bố cục DeepSeek/Grok có thể chưa được hỗ trợ. Nếu không lấy được hội thoại, hãy dùng nhập JSON để dự phòng.',
+  'Bring your AI conversations together. Everything stays on your device.': 'Gom hội thoại từ các AI về một nơi. Mọi dữ liệu nằm trên thiết bị của bạn.',
+  'I confirm this tab is my local Open WebUI and want to enable capture for it.': 'Tôi xác nhận tab này là Open WebUI local của mình và muốn bật lấy hội thoại từ đây.',
+  'Local capture is optional and limited to the Open WebUI page on localhost / 127.0.0.1. Ollama and LM Studio API endpoints do not provide this chat-history integration.': 'Lấy hội thoại local là tùy chọn, chỉ dành cho trang Open WebUI tại localhost / 127.0.0.1. Chức năng này không lấy lịch sử trực tiếp từ API Ollama hoặc LM Studio.',
+  'Use Threadkeep Capture with supported AI websites. For local AI, open your own Open WebUI tab and explicitly enable local capture. All adapters are experimental; JSON imports remain under Advanced.': 'Dùng Threadkeep Capture với các website AI được hỗ trợ. Với AI local, hãy mở tab Open WebUI của bạn và chủ động bật lấy hội thoại local. Tất cả bộ đọc trang còn ở mức thử nghiệm; nhập JSON vẫn nằm trong mục Nâng cao.',
+  'For local AI, open your own Open WebUI tab and click the extension icon. Local capture requires your explicit opt-in; it does not scan your computer or connect to model-server APIs.': 'Với AI local, mở tab Open WebUI của bạn rồi bấm biểu tượng extension. Bạn phải chủ động bật tính năng này; extension không quét máy tính hay kết nối API máy chủ mô hình.',
+  'Save from an AI website': 'Lưu từ website AI', 'Open a supported AI website first.': 'Trước tiên hãy mở website AI được hỗ trợ.',
+  'Open a saved conversation on a supported AI website first.': 'Trước tiên hãy mở hội thoại đã lưu trên một website AI được hỗ trợ.',
+  'Open a supported AI website, then click the Threadkeep extension icon.': 'Mở website AI được hỗ trợ rồi bấm biểu tượng extension Threadkeep.',
+  'Cannot safely identify message authors in this layout. Capture was stopped.': 'Chưa xác định chắc chắn vai trò người gửi trong bố cục này. Đã dừng lấy hội thoại.',
+  'AI tools': 'Công cụ AI', 'Capture beta': 'Bản thử nghiệm',
+  'Install the extension, open a supported AI conversation, then click its toolbar icon. Choose the current conversation or find history and select individual conversations / all discovered conversations.': 'Cài extension, mở hội thoại trên một AI được hỗ trợ rồi bấm biểu tượng extension trên thanh công cụ. Chọn hội thoại đang mở, hoặc tìm lịch sử và chọn từng hội thoại / tất cả đã tìm thấy.',
+  'Use Threadkeep Capture with ChatGPT, Claude, Gemini or DeepSeek to save a current conversation or select discovered history. These DOM adapters are experimental and not verified on signed-in live accounts. JSON imports remain under Advanced as a fallback.': 'Dùng Threadkeep Capture với ChatGPT, Claude, Gemini hoặc DeepSeek để lưu hội thoại đang mở hoặc chọn từ lịch sử đã tìm thấy. Các bộ đọc trang này đang thử nghiệm, chưa được kiểm chứng trên tài khoản thật đã đăng nhập. Nhập JSON vẫn nằm trong mục Nâng cao để dự phòng.',
   'Save from AI': 'Lưu từ AI', 'Save from ChatGPT or Claude': 'Lưu từ ChatGPT hoặc Claude',
   'Captured at': 'Lấy lúc', 'Account label': 'Nhãn tài khoản',
   'Advanced: import JSON export': 'Nâng cao: nhập file JSON', 'Save straight to Threadkeep': 'Lưu thẳng vào Threadkeep',
@@ -207,13 +221,15 @@ export const staticBindings = [
   ['#archive-disclaimer', 'Automatic archiving runs only while this app is open. It never deletes originals.'],
   ['#archive-preview', 'Preview'], ['#archive-apply', 'Apply'], ['#archive-cancel', 'Cancel'],
   ['#advanced-import', 'Advanced: import JSON export'], ['#connect-dialog h2', 'Save straight to Threadkeep'],
-  ['#connect-instructions', 'Install the extension, open a ChatGPT or Claude conversation, then click its toolbar icon. Choose the current conversation or find history and select individual conversations / all discovered conversations.'],
+  ['#connect-instructions', 'Install the extension, open a supported AI conversation, then click its toolbar icon. Choose the current conversation or find history and select individual conversations / all discovered conversations.'],
   ['#extension-download', 'Download extension ZIP'], ['#extension-instructions', 'Install instructions'], ['#close-connect', 'Close capture setup', 'aria-label'],
   ['#capture-review h2', 'Review captured conversations'], ['#capture-scope', 'This beta saves rendered text, not hidden branches or media files. Whole-account coverage is not verified.'],
-  ['#capture-confirm', 'Add to library'], ['#capture-later', 'Review later']
+  ['#capture-confirm', 'Add to library'], ['#capture-later', 'Review later'], ['#provider-chips', 'AI tools', 'aria-label'],
+  ['#local-capture-guide', 'For local AI, open your own Open WebUI tab and click the extension icon. Local capture requires your explicit opt-in; it does not scan your computer or connect to model-server APIs.'],
+  ['#provider-warning', 'New provider connections are experimental. Some DeepSeek/Grok layouts may be unsupported; complete account sync is not verified.']
 ];
 export const guideKeys = [
-  ['Save from your browser', 'Use Threadkeep Capture to save the current ChatGPT/Claude conversation, or discover history and select individual conversations or all discovered conversations. JSON imports remain available under Advanced as a fallback. Library backup and restore are separate features.'],
+  ['Save from your browser', 'Use Threadkeep Capture with supported AI websites. For local AI, open your own Open WebUI tab and explicitly enable local capture. All adapters are experimental; JSON imports remain under Advanced.'],
   ['What this alpha keeps', 'Text messages, titles, dates and ChatGPT branches. The reader starts on the active branch; use its branch picker to see alternatives. Raw imported JSON is retained in library backups. Images, uploaded files, generated assets, rendered tools and shared links are not downloaded. Unsupported content is marked rather than silently presented as complete.'],
   ['Your browser is the storage', 'Everything stays in IndexedDB on this browser and this site address. Clearing site data, switching browsers or private browsing can lose access. Export regular library backups and keep them somewhere safe. Backups contain private conversation text and raw export data.'],
   ['Honest handoffs', 'Handoffs contain your selected excerpts, source IDs and an editable checklist. They are not AI summaries and do not decide what you agreed on. Threadkeep does not send messages to AI providers or delete chats on their services.'],

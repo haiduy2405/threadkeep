@@ -2,7 +2,7 @@
 
 **Find the thread. Pick up where you left off.**
 
-A private, local-first library for ChatGPT and Claude conversation exports. No account, API key, analytics, cloud database, or runtime dependencies. An early open-source alpha, built by Duy / duyluma.
+A private, local-first library for AI conversations. No account, API key, analytics, cloud database, or runtime dependencies. An early open-source alpha, built by Duy / duyluma.
 
 **[Open the live alpha](https://haiduy2405.github.io/threadkeep/)** · [Report a bug](https://github.com/haiduy2405/threadkeep/issues)
 
@@ -25,9 +25,14 @@ npm run check
 
 The app is static HTML, CSS and ES modules. The local server uses only Node built-ins and binds to loopback. There is no build step.
 
-## What works in v0.3
+## What works in v0.4
 
-- **Experimental Threadkeep Capture extension**: save the currently open ChatGPT/Claude conversation, or discover links in loaded history and select individual conversations / all discovered conversations. [Download ZIP](https://haiduy2405.github.io/threadkeep/downloads/threadkeep-extension-v0.3.0.zip) · [Install guide](extension/README.md).
+- A redesigned gradient workspace with quieter violet/cyan accents, separate statistic cards, provider filter chips and more readable conversation cards. All styling is local CSS; no remote fonts, images or tracking assets were added.
+- A shared provider registry for ChatGPT, Claude, Gemini, DeepSeek, Grok and optional loopback Open WebUI capture. The library filters, source links, exports and backups accept these provider identities.
+- Local Open WebUI capture is opt-in, limited to `localhost` / `127.0.0.1`, and requires confirmation in the extension manager. It does not discover local services, read Ollama/LM Studio model-server APIs, or scan a LAN. Different local server origins stay separate.
+- **Every DOM adapter remains experimental.** Gemini uses `user-query` / `model-response` containers. DeepSeek and Grok require explicit author-role markers; ambiguous layouts stop with an explanation instead of guessing who wrote each message. No signed-in live-account validation has been completed. See [provider readiness](docs/PROVIDERS.md).
+
+- **Experimental Threadkeep Capture extension**: save the current conversation on a configured provider, or discover links in loaded history and select individual conversations / all discovered conversations. [Download ZIP](https://haiduy2405.github.io/threadkeep/downloads/threadkeep-extension-v0.4.0.zip) · [Install guide](extension/README.md).
 - A user-reviewed handoff from the extension to the web library through local browser messaging. Captures include source URLs, capture time, a user-declared account label and explicit coverage limits. No provider login credentials or cookies are requested.
 - The primary button is **Save from AI**. JSON export import remains under **Advanced** until provider capture is validated; library backup/restore remains separate.
 
@@ -79,6 +84,8 @@ No verified whole-account synchronization, media-file import, export-ZIP import,
 | `src/storage.js` | Atomic IndexedDB persistence |
 | `src/i18n.js` | English/Vietnamese strings, locale selection and translation helpers |
 | `src/capture.js` | Bounded capture validation and account-separated source normalization |
+| `src/providers.js` | Exact provider origins, conversation paths and explicit DOM author roles |
+| `src/theme.css` | Gradient workspace theme and responsive provider chips |
 | `extension/` | Chromium Manifest V3 capture manager, DOM adapters and app bridge |
 | `scripts/package-extension.mjs` | Reproducible dependency-free unpacked extension ZIP |
 | `src/app.js` | UI and cross-tab coordination |

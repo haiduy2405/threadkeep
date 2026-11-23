@@ -2,6 +2,7 @@ import {SCHEMA_VERSION, parseExport, mergeConversations, filterConversations, ac
 import {readLibrary, saveLibrary} from './storage.js';
 import {resolveLanguage, localeFor, translator, errorText, staticBindings, guideKeys} from './i18n.js';
 import {normalizeCaptureBatch} from './capture.js';
+import {providers} from './providers.js';
 let savedLanguage;
 try { savedLanguage = localStorage.getItem('threadkeep-language'); } catch { /* Optional preference storage. */ }
 let language = resolveLanguage(savedLanguage, navigator.languages || [navigator.language]), t = translator(language), currentReader = null;
@@ -10,12 +11,12 @@ const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let state = {chats: [], projects: [], settings: {autoArchive: false, archiveDays: 90}}, view = {query: '', provider: 'all', sort: 'recent', status: 'active'}, selected = new Set(), busy = false, storageReady = false;
 const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('threadkeep-library') : null;
-const label = provider => ({chatgpt: 'ChatGPT', claude: 'Claude', demo: t('Demo')}[provider] || provider);
+const label = provider => provider === 'demo' ? t('Demo') : providers.find(p => p.id === provider)?.label || provider;
 const formatDate = value => value ? new Date(value).toLocaleDateString(localeFor(language), {month: 'short', day: 'numeric', year: 'numeric'}) : t('Date unknown');
 function localizeStatic() {
   document.documentElement.lang = language; document.title = t('Threadkeep — Your AI library'); $('language').value = language;
   for (const [selector, key, attribute] of staticBindings) { const node = document.querySelector(selector); if (node) attribute ? node.setAttribute(attribute, t(key)) : node.textContent = t(key); }
-  $('version-label').textContent = `v0.3.0 · ${t('Open source')} · MIT`;
+  $('version-label').textContent = `v0.4.0 · ${t('Open source')} · MIT`;
   const headings = $('info').querySelectorAll('h3'), paragraphs = $('info').querySelectorAll(':scope > p');
   guideKeys.forEach(([heading, paragraph], i) => { headings[i].textContent = t(heading); paragraphs[i].textContent = t(paragraph); });
 }
@@ -45,6 +46,15 @@ function render() {
   $('stat-chats').textContent = state.chats.filter(c => !c.trashedAt).length.toLocaleString(localeFor(language));
   $('stat-messages').textContent = state.chats.filter(c => !c.trashedAt).reduce((sum, c) => sum + allMessages(c).length, 0).toLocaleString(localeFor(language));
   $('stat-projects').textContent = state.projects.length;
+  $('provider-chips').replaceChildren();
+  for (const provider of [{id: 'all', label: t('All AI tools')}, ...providers]) {
+    const chip = el('button', `provider-chip ${provider.id} ${view.provider === provider.id ? 'selected' : ''}`);
+    chip.setAttribute('aria-pressed', String(view.provider === provider.id));
+    const symbol = ({all: '◈', chatgpt: '✳', claude: '✴', gemini: '✦', deepseek: 'D', grok: '𝕏', openwebui: '⌂'})[provider.id];
+    chip.append(el('span', 'chip-icon', symbol), el('span', 'chip-name', provider.label), el('span', 'chip-count', state.chats.filter(c => !c.trashedAt && (provider.id === 'all' || c.provider === provider.id)).length));
+    chip.onclick = () => { view.provider = provider.id; $('provider').value = provider.id; render(); };
+    $('provider-chips').append(chip);
+  }
   $('projects').replaceChildren();
   for (const p of state.projects) {
     const b = el('button', `nav ${view.projectId === p.id ? 'active' : ''}`); b.append(el('span', 'project-dot', '●'), el('span', '', p.name), el('b', '', active.filter(c => c.projectId === p.id).length));
@@ -64,14 +74,14 @@ function render() {
   $('archive-selected').hidden = view.status !== 'active'; $('unarchive-selected').hidden = view.status !== 'archived'; $('trash-selected').hidden = view.status === 'trash'; $('restore-selected').hidden = view.status !== 'trash';
   $('conversations').replaceChildren();
   if (!chats.length) {
-    const empty = el('div', 'empty'); empty.append(el('div', 'empty-icon', state.chats.length ? '⌕' : '▤'), el('h2', '', t(state.chats.length ? 'No threads found.' : 'Good ideas deserve a home.')), el('p', '', t(state.chats.length ? 'Try a different search or filter.' : 'Bring your ChatGPT and Claude conversations together. Everything stays on your device.')));
-    if (!state.chats.length) { const b = el('button', 'primary', t('Save from ChatGPT or Claude')); b.onclick = openCaptureSetup; empty.append(b); const demo = el('button', 'quiet', t('Or explore a sample library →')); demo.onclick = loadDemo; empty.append(demo); }
+    const empty = el('div', 'empty'); empty.append(el('div', 'empty-icon', state.chats.length ? '⌕' : '▤'), el('h2', '', t(state.chats.length ? 'No threads found.' : 'Good ideas deserve a home.')), el('p', '', t(state.chats.length ? 'Try a different search or filter.' : 'Bring your AI conversations together. Everything stays on your device.')));
+    if (!state.chats.length) { const b = el('button', 'primary', t('Save from an AI website')); b.onclick = openCaptureSetup; empty.append(b); const demo = el('button', 'quiet', t('Or explore a sample library →')); demo.onclick = loadDemo; empty.append(demo); }
     $('conversations').append(empty);
   }
   for (const c of chats) {
     const row = el('article', 'conversation');
     const check = el('input'); check.type = 'checkbox'; check.checked = selected.has(c.id); check.setAttribute('aria-label', t('Select {title}', {title: c.title})); check.onchange = () => { check.checked ? selected.add(c.id) : selected.delete(c.id); render(); };
-    const icon = el('span', `provider-icon ${c.provider}`, c.provider === 'chatgpt' ? '✳' : c.provider === 'claude' ? '✴' : '◇');
+    const icon = el('span', `provider-icon ${c.provider}`, ({chatgpt: '✳', claude: '✴', gemini: '✦', deepseek: 'D', grok: '𝕏', openwebui: '⌂'})[c.provider] || '◇');
     const body = el('button', 'conversation-body'); body.append(el('h3', '', c.title));
     const sourceMessages = allMessages(c);
     const q = view.query.toLocaleLowerCase().trim().split(/\s+/)[0];
@@ -93,7 +103,8 @@ function showReader(c, leaf = c.activeLeaf) {
   $('reader-title').textContent = c.title; $('reader-provider').textContent = label(c.provider);
   $('reader-meta').replaceChildren(el('p', '', t('Source ID: {id} · {date}', {id: c.sourceId, date: formatDate(c.updatedAt)})));
   if (c.captureScope) $('reader-meta').append(el('p', '', t('Account label: {label}', {label: c.accountLabel})), el('p', '', t('Capture: rendered text only; hidden branches and media files are not included.')));
-  if (c.provider === 'chatgpt') { const a = el('a', 'source-link', t('Open original conversation ↗')); a.href = `https://chatgpt.com/c/${encodeURIComponent(c.sourceId)}`; a.target = '_blank'; a.rel = 'noopener noreferrer'; $('reader-meta').append(a); }
+  const originalURL = c.sourceUrl || (c.provider === 'chatgpt' ? `https://chatgpt.com/c/${encodeURIComponent(c.sourceId)}` : null);
+  if (originalURL) { const a = el('a', 'source-link', t('Open original conversation ↗')); a.href = originalURL; a.target = '_blank'; a.rel = 'noopener noreferrer'; $('reader-meta').append(a); }
   $('branch-controls').replaceChildren();
   if (c.leaves?.length > 1) {
     const label = el('label', 'branch-label', t('Conversation branch') + ' '), picker = el('select'); picker.setAttribute('aria-label', t('Conversation branch'));

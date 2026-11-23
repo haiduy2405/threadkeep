@@ -1,5 +1,6 @@
 import {translator} from './i18n.js';
 import {normalizeCapture} from './capture.js';
+import {providerIds} from './providers.js';
 export const SCHEMA_VERSION = 1;
 const date = value => {
   if (!value) return null;
@@ -83,7 +84,7 @@ export function updateConversationState(chats, ids, action, now = new Date().toI
   return chats.map(c => !selected.has(c.id) ? c : action === 'trash' ? {...c, trashedAt: now} : action === 'restore' ? {...c, trashedAt: null} : {...c, archived: action === 'archive'});
 }
 const safeHeading = text => String(text).replace(/[\r\n]+/g, ' ');
-const captureNote = (c, t) => c.captureScope ? `\n> ${t('Capture: rendered text only; hidden branches and media files are not included.')}\n${t('Captured at')}: ${c.capturedAt}\n${t('Account label')}: ${safeHeading(c.accountLabel)}\n` : '';
+const captureNote = (c, t) => c.captureScope ? `\n> ${t('Capture: rendered text only; hidden branches and media files are not included.')}\n${t('Captured at')}: ${c.capturedAt}\n${t('Account label')}: ${safeHeading(c.accountLabel)}\n${c.provider !== 'chatgpt' ? `${t('Original')}: ${c.sourceUrl}\n` : ''}` : '';
 export function toMarkdown(chats, language = 'en') {
   const t = translator(language);
   return chats.map(c => `# ${safeHeading(c.title)}\n\n${t('Provider')}: ${c.provider}\n${t('Source ID')}: ${safeHeading(c.sourceId)}\n${t('Updated')}: ${c.updatedAt || t('Unknown')}\n${captureNote(c, t)}${c.provider === 'chatgpt' ? `${t('Original')}: https://chatgpt.com/c/${encodeURIComponent(c.sourceId)}\n` : ''}\n> ${t('Text export; external files and images are not included. ChatGPT exports show the active branch.')}\n\n${activeMessages(c).map(m => `## ${safeHeading(t(m.role))}\n\n${m.text}${m.attachmentCount ? `\n\n[${t('{count} attachment reference(s); original files not included', {count: m.attachmentCount})}]` : ''}`).join('\n\n')}`).join('\n\n---\n\n');
@@ -107,7 +108,7 @@ export function validateBackup(data) {
   const projectIds = new Set(projects.map(p => p.id));
   if (projectIds.size !== projects.length) throw new Error('Duplicate project IDs in backup.');
   const chats = data.chats.map(c => {
-    if (!c || !['chatgpt', 'claude', 'demo'].includes(c.provider) || typeof c.id !== 'string' || typeof c.sourceId !== 'string' || typeof c.title !== 'string' || !Array.isArray(c.messages) || c.messages.some(m => typeof m?.text !== 'string' || typeof m.role !== 'string')) throw new Error('Invalid conversation in backup.');
+    if (!c || ![...providerIds, 'demo'].includes(c.provider) || typeof c.id !== 'string' || typeof c.sourceId !== 'string' || typeof c.title !== 'string' || !Array.isArray(c.messages) || c.messages.some(m => typeof m?.text !== 'string' || typeof m.role !== 'string')) throw new Error('Invalid conversation in backup.');
     if (c.provider !== 'demo') {
       if (!c.raw) throw new Error('Source JSON missing from backup.');
       const parsed = parseExport([c.raw]).chats[0];

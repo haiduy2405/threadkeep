@@ -2,9 +2,17 @@
 
 This is an unpacked Manifest V3 extension for Chromium browsers. It is not listed in an extension store, has not had an independent security audit, and has not yet been validated against signed-in ChatGPT and Claude accounts. DOM adapters are experimental: synthetic tests cannot establish compatibility with every live layout.
 
+v0.4 adds Gemini, DeepSeek, Grok and optional local Open WebUI configurations. All are unverified on signed-in/deployed instances. DeepSeek/Grok layouts without explicit author roles are rejected; adding a provider name does not certify that its current website can be fully captured. See [provider readiness](../docs/PROVIDERS.md).
+
+## AI local / Local AI
+
+Mở trang Open WebUI local mà bạn đang dùng, tại `localhost` hoặc `127.0.0.1` (ví dụ cổng do bạn đã cài), rồi bấm biểu tượng extension. Trong trình quản lý, đánh dấu xác nhận đây là Open WebUI của bạn trước khi lưu. Không tự quét cổng hay mạng LAN. Tính năng này lấy văn bản trong giao diện Open WebUI; không lấy lịch sử trực tiếp từ API Ollama/LM Studio. Mỗi địa chỉ máy chủ local được tách riêng trong kho.
+
+For local capture, invoke the extension on your own loopback Open WebUI tab and explicitly opt in using the confirmation checkbox. Model-serving APIs are not chat-history backends for this adapter. Local host permissions are optional and used only for a selected loopback UI, not automatic network discovery. LAN and IPv6-hosted UIs are not supported in this version.
+
 ## Cài đặt trên Chrome / Edge / Cốc Cốc
 
-1. Tải `threadkeep-extension-v0.3.0.zip` từ nút **Lưu từ AI** trên Threadkeep, rồi giải nén vào một thư mục riêng.
+1. Tải `threadkeep-extension-v0.4.0.zip` từ nút **Lưu từ AI** trên Threadkeep, rồi giải nén vào một thư mục riêng.
 2. Mở trang quản lý tiện ích của trình duyệt (`chrome://extensions` trên Chrome, `edge://extensions` trên Edge; Cốc Cốc dùng trang quản lý tiện ích tương ứng).
 3. Bật **Chế độ dành cho nhà phát triển / Developer mode**, chọn **Tải tiện ích đã giải nén / Load unpacked** và chọn thư mục chứa `manifest.json`.
 4. Mở lại Threadkeep hoặc tải lại tab đang mở để nhận cầu nối extension.

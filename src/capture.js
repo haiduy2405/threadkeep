@@ -1,13 +1,13 @@
 // Shared with the browser extension by scripts/package-extension.mjs.
+import {providerForURL} from './providers.js';
 export const CAPTURE_LIMIT = 2 * 1024 * 1024;
 export const BATCH_LIMIT = 8 * 1024 * 1024;
 export function conversationURL(value) {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:' || url.username || url.password) return null;
-    const provider = url.hostname === 'chatgpt.com' ? 'chatgpt' : url.hostname === 'claude.ai' ? 'claude' : null;
-    const match = provider === 'chatgpt' ? url.pathname.match(/^\/(?:g\/[^/]+\/)?c\/([a-zA-Z0-9_-]{6,128})\/?$/) : provider === 'claude' ? url.pathname.match(/^\/chat\/([a-zA-Z0-9_-]{6,128})\/?$/) : null;
-    return match ? {provider, sourceId: match[1], url: url.origin + url.pathname.replace(/\/$/, '')} : null;
+    if (url.username || url.password) return null;
+    const provider = providerForURL(value), match = provider && url.pathname.match(new RegExp(provider.path));
+    return match ? {provider: provider.id, sourceId: match[1], url: url.origin + url.pathname.replace(/\/$/, '')} : null;
   } catch { return null; }
 }
 export function normalizeCapture(raw) {
@@ -23,7 +23,7 @@ export function normalizeCapture(raw) {
     return {id: typeof m.id === 'string' && m.id.length < 200 ? m.id : `dom-${i}`, role: m.role, text: m.text, createdAt: null};
   });
   return {
-    id: `capture:${source.provider}:${encodeURIComponent(accountLabel.toLocaleLowerCase())}:${source.sourceId}`,
+    id: `capture:${source.provider}:${source.provider === 'openwebui' ? encodeURIComponent(new URL(source.url).origin) + ':' : ''}${encodeURIComponent(accountLabel.toLocaleLowerCase())}:${source.sourceId}`,
     provider: source.provider, sourceId: source.sourceId, sourceUrl: source.url, accountLabel,
     title: raw.title.trim(), createdAt: null, updatedAt: null, capturedAt: new Date(raw.capturedAt).toISOString(),
     captureScope: 'rendered-text', messages,

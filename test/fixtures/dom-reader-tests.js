@@ -25,5 +25,27 @@ test('Plain text containing HTML-like characters stays text', () => {
   const chat = threadkeepExtract(parse('<div data-message-author-role="user">&lt;script&gt;not executable&lt;/script&gt;</div>'), 'https://chatgpt.com/c/synthetic-thread-001');
   assert(chat.messages[0].text === '<script>not executable</script>', 'Text changed');
 });
+test('Gemini custom elements preserve user/model order and source identity', () => {
+  const chat = threadkeepExtract(parse('<title>A Gemini plan — Gemini</title><user-query><p>User prompt</p></user-query><model-response><p>Model answer</p></model-response>'), 'https://gemini.google.com/u/1/app/gemini-chat-001');
+  assert(chat.provider === 'gemini' && chat.messages.length === 2, 'Gemini identity/count mismatch'); assert(chat.messages[0].role === 'user' && chat.messages[1].role === 'assistant', 'Wrong Gemini roles');
+});
+test('DeepSeek/Grok semantic author markers are recognized without guessing alignment', () => {
+  for (const [provider, url, cls] of [['deepseek', 'https://chat.deepseek.com/a/chat/s/deepseek-chat-001', 'ds-message'], ['grok', 'https://grok.com/c/grok-chat-001', 'message-bubble']]) {
+    const chat = threadkeepExtract(parse(`<div class="${cls}" data-role="user">Question</div><div class="${cls}" data-role="assistant">Answer</div>`), url);
+    assert(chat.provider === provider && chat.messages[0].role === 'user' && chat.messages[1].role === 'assistant', 'Semantic roles mismatch');
+    let failed = false; try { threadkeepExtract(parse(`<div class="${cls}">Ambiguous author</div>`), url); } catch (error) { failed = error.message.includes('Cannot safely identify'); }
+    assert(failed, 'Ambiguous author should stop capture');
+  }
+});
+test('Open WebUI uses explicit chat-role containers on a loopback source', () => {
+  const chat = threadkeepExtract(parse('<div class="chat-user">Local prompt</div><div class="chat-assistant">Local answer</div>'), 'http://127.0.0.1:8080/c/local-chat-001');
+  assert(chat.provider === 'openwebui' && chat.messages.length === 2, 'Open WebUI extraction failed'); assert(chat.sourceUrl.startsWith('http://127.0.0.1:8080/'), 'Local origin was not preserved');
+});
+test('Discovery works for each new provider and rejects cross-provider links', () => {
+  for (const url of ['https://gemini.google.com/app/gemini-chat-001', 'https://chat.deepseek.com/a/chat/s/deepseek-chat-001', 'https://grok.com/c/grok-chat-001', 'http://localhost:3000/c/local-chat-001']) {
+    const doc = parse(`<a href="${url}">Saved conversation</a><a href="https://evil.test/c/fake-chat-001">Bad</a>`);
+    assert(threadkeepLinks(doc, url).length === 1, 'New-provider link discovery failed');
+  }
+});
 for (const result of results) { const row = document.createElement('li'); row.textContent = `${result.pass ? 'PASS' : 'FAIL'}: ${result.name}${result.error ? ' — ' + result.error : ''}`; document.getElementById('results').append(row); }
 document.getElementById('summary').textContent = `${results.filter(r => r.pass).length}/${results.length} DOM fixture checks passed`;

@@ -1,8 +1,9 @@
 import {translator, resolveLanguage, errorText} from './i18n.js';
 import {conversationURL, normalizeCapture, normalizeCaptureBatch, BATCH_LIMIT} from './capture-normalizer.js';
+import {providerForURL} from './providers.js';
 const $ = id => document.getElementById(id), params = new URL(location.href).searchParams;
 const appURL = 'https://haiduy2405.github.io/threadkeep/';
-let sourceTab, providerOrigin, entries = [], selected = new Set(), running = false, cancelled = false;
+let sourceTab, sourceProvider, providerOrigin, entries = [], selected = new Set(), running = false, cancelled = false;
 const preferences = await chrome.storage.local.get(['language', 'accountLabels', 'pendingCapture']);
 let language = resolveLanguage(preferences.language, navigator.languages), t = translator(language);
 function localize() {
@@ -12,9 +13,9 @@ function localize() {
   $('account').placeholder = t('Personal / Work'); render();
 }
 function status(key, values = {}) { $('status').textContent = t(key, values); }
-function lock(value) { running = value; $('save-one').disabled = value || !providerOrigin; $('scan').disabled = value || !providerOrigin; $('save-selected').disabled = value || !selected.size; $('account').disabled = value; $('cancel').hidden = !value; }
+function lock(value) { running = value; const disabled = value || !providerOrigin || sourceProvider?.loopback && !$('local-consent').checked; $('save-one').disabled = disabled; $('scan').disabled = disabled; $('save-selected').disabled = disabled || !selected.size; $('account').disabled = value; $('local-consent').disabled = value; $('cancel').hidden = !value; }
 async function read(tabId, mode) {
-  await chrome.scripting.executeScript({target: {tabId}, files: ['dom-reader.js']});
+  await chrome.scripting.executeScript({target: {tabId}, files: ['provider-registry.js', 'dom-reader.js']});
   const [result] = await chrome.scripting.executeScript({target: {tabId}, func: mode => threadkeepRead(mode), args: [mode]});
   if (!result?.result) throw new Error('The reader did not return any data.'); return result.result;
 }
@@ -43,10 +44,11 @@ function render() {
   }
   $('coverage').textContent = t('Found {count} conversations in the loaded history. This does not prove the whole account was loaded.', {count: entries.length});
   $('select-all').checked = entries.length > 0 && selected.size === entries.length; $('select-all').indeterminate = selected.size > 0 && selected.size < entries.length; $('select-all').disabled = running;
-  $('save-selected').disabled = running || !selected.size;
+  $('save-selected').disabled = running || !selected.size || sourceProvider?.loopback && !$('local-consent').checked;
 }
 $('language').onchange = async e => { language = resolveLanguage(e.target.value); t = translator(language); await chrome.storage.local.set({language}); localize(); };
 $('search').oninput = render; $('select-all').onchange = e => { selected = new Set(e.target.checked ? entries.map(item => item.url) : []); render(); };
+$('local-consent').onchange = () => lock(running);
 $('pending').onclick = () => chrome.tabs.create({url: appURL}); $('cancel').onclick = () => { cancelled = true; status('Stopping after the current conversation…'); };
 $('save-one').onclick = async () => {
   lock(true);
@@ -97,7 +99,9 @@ $('save-selected').onclick = async () => {
 localize();
 try {
   sourceTab = await chrome.tabs.get(Number(params.get('tab')));
-  const url = new URL(sourceTab.url); if (!['https://chatgpt.com', 'https://claude.ai'].includes(url.origin)) throw new Error('Open ChatGPT or Claude, then click the Threadkeep extension icon.');
+  const url = new URL(sourceTab.url); sourceProvider = providerForURL(url.href); if (!sourceProvider) throw new Error('Open a supported AI website, then click the Threadkeep extension icon.');
+  $('local-consent-row').hidden = !sourceProvider.loopback; $('local-disclaimer').hidden = !sourceProvider.loopback;
+  $('provider-warning').hidden = !['deepseek', 'grok'].includes(sourceProvider.id);
   providerOrigin = url.origin; $('source').textContent = `${url.hostname} · ${sourceTab.title || ''}`; $('account').value = preferences.accountLabels?.[providerOrigin] || '';
   if (preferences.pendingCapture) { $('pending').hidden = false; status('Finish reviewing the pending capture in Threadkeep before saving another batch.'); }
 } catch (error) { status(errorText(error, t)); }

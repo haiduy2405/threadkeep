@@ -12,8 +12,8 @@ const server = createServer(async (req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
     const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
-    const devFixture = process.env.THREADKEEP_TEST === '1' && (/^test\/fixtures\/[a-z-]+\.(html|js)$/.test(relative) || relative === 'extension/dom-reader.js');
-    if (relative !== 'index.html' && relative !== 'icon.svg' && relative !== 'downloads/threadkeep-extension-v0.3.0.zip' && !/^src\/[a-z0-9-]+\.(js|css)$/.test(relative) && !devFixture) throw new Error('Not found');
+    const devFixture = process.env.THREADKEEP_TEST === '1' && (/^test\/fixtures\/[a-z-]+\.(html|js)$/.test(relative) || ['extension/dom-reader.js', 'extension/provider-registry.js'].includes(relative));
+    if (relative !== 'index.html' && relative !== 'icon.svg' && !/^downloads\/threadkeep-extension-v0\.[34]\.0\.zip$/.test(relative) && !/^src\/[a-z0-9-]+\.(js|css)$/.test(relative) && !devFixture) throw new Error('Not found');
     const path = await realpath(resolve(root, relative));
     if (!path.startsWith(root + sep)) throw new Error('Not found');
     let data = await readFile(path);

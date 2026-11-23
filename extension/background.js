@@ -9,7 +9,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== chrome.runtime.id || !sender.tab || !appURL(sender.tab.url)) return;
   if (!['THREADKEEP_PULL', 'THREADKEEP_ACK', 'THREADKEEP_HELLO'].includes(message?.type)) return;
   (async () => {
-    if (message.type === 'THREADKEEP_HELLO') return {version: '0.3.0'};
+    if (message.type === 'THREADKEEP_HELLO') return {version: chrome.runtime.getManifest().version};
     if (message.type === 'THREADKEEP_PULL') { const {pendingCapture} = await chrome.storage.local.get('pendingCapture'); return {batch: pendingCapture || null}; }
     const ack = acknowledgements.then(async () => {
       const {pendingCapture} = await chrome.storage.local.get('pendingCapture');

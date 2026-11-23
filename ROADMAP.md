@@ -24,6 +24,15 @@
 - [ ] Signed-in live-account validation for ChatGPT and Claude
 - [ ] Verified entire-account enumeration, projects and archived-history coverage
 
+## 0.4 — Gradient workspace and provider adapters
+- [x] Violet/cyan gradient theme, provider chips and clearer conversation cards
+- [x] Shared provider registry; Gemini, DeepSeek and Grok capture prototypes
+- [x] Optional local Open WebUI capture with explicit opt-in and loopback-only scope
+- [x] Provider-aware URL validation, filtering, source links and backup round trips
+- [x] Reject ambiguous authors instead of guessing roles
+- [ ] Signed-in live validation for every provider; robust DeepSeek/Grok DOM support
+- [ ] Muse identification (awaiting product URL/name)
+
 ## Next — Real-export compatibility and usability
 - [ ] Test with consenting users' redacted real-world export structures
 - [ ] ZIP import with decompression limits and clear asset coverage

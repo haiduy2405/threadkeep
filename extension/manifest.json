@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Threadkeep Capture",
-  "version": "0.3.0",
-  "description": "Save a ChatGPT or Claude conversation, or select from discovered history, directly into your local Threadkeep library.",
+  "version": "0.4.0",
+  "description": "Experimental text capture for ChatGPT, Claude, Gemini, DeepSeek, Grok and optional local Open WebUI.",
   "minimum_chrome_version": "109",
   "permissions": ["activeTab", "scripting", "storage"],
-  "optional_host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*"],
+  "optional_host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*", "https://chat.deepseek.com/*", "https://grok.com/*", "http://localhost/*", "http://127.0.0.1/*", "https://localhost/*", "https://127.0.0.1/*"],
   "action": {"default_title": "Save to Threadkeep"},
   "background": {"service_worker": "background.js", "type": "module"},
   "content_scripts": [{
