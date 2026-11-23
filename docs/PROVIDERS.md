@@ -37,3 +37,5 @@ Evidence: https://muse.ai/ and https://muse.ai/blog/how-we-designed-muse (offici
 - Open WebUI role containers: https://github.com/open-webui/open-webui/blob/main/src/lib/components/chat/Messages/UserMessage.svelte and https://github.com/open-webui/open-webui/blob/main/src/lib/components/chat/Messages/ResponseMessage.svelte
 
 These sources establish product origins or describe upstream UI code, not live compatibility of this extension.
+
+Muse deferred at user request (2026-11-23): user reports sign-in unavailable in Vietnam. No further Muse integration work planned for this release.

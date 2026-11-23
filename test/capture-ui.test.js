@@ -1,0 +1,30 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+import {providers, providerForURL} from '../src/providers.js';
+test('scan unlocks checkboxes and selection enables saving', async () => {
+ const elements=new Map();
+ const element=()=>({value:'',checked:false,disabled:false,children:[],dataset:{},append(...nodes){this.children.push(...nodes)},replaceChildren(){this.children=[]},setAttribute(){}});
+ const get=id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id)};
+ const url='https://chatgpt.com/c/abcdef12';
+ const chrome={storage:{local:{get:async()=>({language:'en',accountLabels:{'https://chatgpt.com':'Personal'}}),set:async()=>{}}},tabs:{get:async()=>({id:1,url})},permissions:{request:async()=>true},scripting:{executeScript:async args=>args.files?[]:[{result:{items:[{url,title:'First chat'}]}}]}};
+ const context=vm.createContext({URL,Set,Map,chrome,navigator:{languages:['en']},location:{href:'https://extension.test/capture.html?tab=1'},document:{documentElement:{},getElementById:get,querySelectorAll:()=>[],createElement:element},resolveLanguage:()=> 'en',translator:()=>key=>key,errorText:e=>e.message,providerForURL,conversationURL:()=>({url,sourceId:'abcdef12'}),normalizeCapture:()=>{},normalizeCaptureBatch:()=>{},BATCH_LIMIT:8388608});
+ const source=(await readFile(new URL('../extension/capture-ui.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
+ await vm.runInContext('(async()=>{'+source+'})()',context);
+ await get('scan').onclick();
+ const checkbox=get('items').children[0].children[0];
+ assert.equal(checkbox.disabled,false);assert.equal(get('select-all').disabled,false);assert.equal(get('save-selected').disabled,true);
+ checkbox.checked=true;checkbox.onchange();assert.equal(Boolean(get('save-selected').disabled),false);assert.equal(get('select-all').checked,true);
+ get('select-all').checked=false;get('select-all').onchange({target:get('select-all')});assert.equal(get('items').children[0].children[0].checked,false);assert.equal(get('save-selected').disabled,true);
+});
+test('history finds 60 virtualized links through delayed pagination outside nav',async()=>{
+ let position=0,loaded=20,ticks=0;
+ const viewport={clientHeight:100,parentElement:null,get scrollHeight(){return loaded*10},get scrollTop(){return position},set scrollTop(v){position=Math.max(0,Math.min(v,this.scrollHeight-100))}};
+ const anchors=()=>Array.from({length:Math.min(12,loaded-Math.floor(position/10))},(_,i)=>{const n=Math.floor(position/10)+i;return{parentElement:viewport,textContent:'Chat '+n,getAttribute:()=>'/c/chatid'+String(n).padStart(6,'0')}});
+ const doc={querySelectorAll:selector=>selector==='a[href]'?anchors():[]};
+ const context=vm.createContext({URL,Map,Set,threadkeepProviders:providers,getComputedStyle:()=>({overflowY:'auto'})});
+ vm.runInContext(await readFile(new URL('../extension/dom-reader.js',import.meta.url),'utf8'),context);
+ const result=await context.threadkeepDiscover(doc,'https://chatgpt.com/',async()=>{if(position>=loaded*10-100&&loaded<60){if(++ticks>=5){loaded+=20;ticks=0}}});
+ assert.equal(result.items.length,60);assert.equal(result.coverage,'discovered-only');assert.equal(position,0);
+});

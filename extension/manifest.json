@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Threadkeep Capture",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Experimental text capture for ChatGPT, Claude, Gemini, DeepSeek, Grok and optional local Open WebUI.",
   "minimum_chrome_version": "109",
   "permissions": ["activeTab", "scripting", "storage"],

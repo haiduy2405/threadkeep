@@ -13,7 +13,7 @@ function localize() {
   $('account').placeholder = t('Personal / Work'); render();
 }
 function status(key, values = {}) { $('status').textContent = t(key, values); }
-function lock(value) { running = value; const disabled = value || !providerOrigin || sourceProvider?.loopback && !$('local-consent').checked; $('save-one').disabled = disabled; $('scan').disabled = disabled; $('save-selected').disabled = disabled || !selected.size; $('account').disabled = value; $('local-consent').disabled = value; $('cancel').hidden = !value; }
+function lock(value) { running = value; const disabled = value || !providerOrigin || sourceProvider?.loopback && !$('local-consent').checked; $('save-one').disabled = disabled; $('scan').disabled = disabled; $('account').disabled = value; $('local-consent').disabled = value; $('cancel').hidden = !value; render(); }
 async function read(tabId, mode) {
   await chrome.scripting.executeScript({target: {tabId}, files: ['provider-registry.js', 'dom-reader.js']});
   const [result] = await chrome.scripting.executeScript({target: {tabId}, func: mode => threadkeepRead(mode), args: [mode]});
@@ -44,7 +44,7 @@ function render() {
   }
   $('coverage').textContent = t('Found {count} conversations in the loaded history. This does not prove the whole account was loaded.', {count: entries.length});
   $('select-all').checked = entries.length > 0 && selected.size === entries.length; $('select-all').indeterminate = selected.size > 0 && selected.size < entries.length; $('select-all').disabled = running;
-  $('save-selected').disabled = running || !selected.size || sourceProvider?.loopback && !$('local-consent').checked;
+  $('save-selected').disabled = running || !providerOrigin || !selected.size || sourceProvider?.loopback && !$('local-consent').checked;
 }
 $('language').onchange = async e => { language = resolveLanguage(e.target.value); t = translator(language); await chrome.storage.local.set({language}); localize(); };
 $('search').oninput = render; $('select-all').onchange = e => { selected = new Set(e.target.checked ? entries.map(item => item.url) : []); render(); };

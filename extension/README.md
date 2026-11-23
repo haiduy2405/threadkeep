@@ -12,7 +12,7 @@ For local capture, invoke the extension on your own loopback Open WebUI tab and 
 
 ## Cài đặt trên Chrome / Edge / Cốc Cốc
 
-1. Tải `threadkeep-extension-v0.4.0.zip` từ nút **Lưu từ AI** trên Threadkeep, rồi giải nén vào một thư mục riêng.
+1. Tải `threadkeep-extension-v0.4.1.zip` từ nút **Lưu từ AI** trên Threadkeep, rồi giải nén vào một thư mục riêng.
 2. Mở trang quản lý tiện ích của trình duyệt (`chrome://extensions` trên Chrome, `edge://extensions` trên Edge; Cốc Cốc dùng trang quản lý tiện ích tương ứng).
 3. Bật **Chế độ dành cho nhà phát triển / Developer mode**, chọn **Tải tiện ích đã giải nén / Load unpacked** và chọn thư mục chứa `manifest.json`.
 4. Mở lại Threadkeep hoặc tải lại tab đang mở để nhận cầu nối extension.
@@ -47,3 +47,11 @@ Give the current account a unique label. Choose **Save current conversation**, o
 ## Development
 
 Run `npm run package:extension` from the repository root to copy the shared translation/validation modules and rebuild the dependency-free ZIP. Synthetic Node tests cover source validation, quotas, merging, backups and message boundaries. The local DOM fixture runner is available only with `THREADKEEP_TEST=1` on the development server; it is not enabled in ordinary local serving.
+
+## Updating to 0.4.1 / Cap nhat
+
+Download and extract the new ZIP into your extension folder, open chrome://extensions (or edge://extensions), then click Reload for Threadkeep. Close old capture-manager tabs and reopen from the AI site's extension icon. Refreshing the Threadkeep website alone does not update an unpacked extension.
+
+Ban can giai nen ZIP moi, bam Reload / Tai lai tien ich trong chrome://extensions (hoac edge://extensions), roi dong tab chup hoi thoai cu va mo lai. Chi tai lai website Threadkeep khong cap nhat tien ich.
+
+0.4.1 fixes disabled selection checkboxes after discovery and matches the website's violet/cyan gradient. Discovery now walks the scroll ancestors of history links, scrolls in overlapping steps, and waits for delayed pagination. It remains bounded (up to 90 steps / 1000 links); a successful scan does not establish full-account coverage. Open the provider's history sidebar first.

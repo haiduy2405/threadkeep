@@ -58,18 +58,37 @@ async function threadkeepRead(mode) {
     throw lastError || new Error('The conversation did not become stable. Try again once it has finished loading.');
   }
   if (mode !== 'discover') throw new Error('Unknown reader mode.');
-  const found = new Map(), scrollables = [...document.querySelectorAll('nav, aside, [role="navigation"], [data-radix-scroll-area-viewport]')].flatMap(root => [root, ...root.querySelectorAll('div')]).filter(n => n.scrollHeight > n.clientHeight + 50 && /auto|scroll/.test(getComputedStyle(n).overflowY));
-  const original = scrollables.map(node => node.scrollTop); let stable = 0;
-  try {
-    for (let round = 0; round < 30; round++) {
-      const size = found.size;
-      for (const item of threadkeepLinks(document, location.href)) found.set(item.url, item);
-      if (found.size > 1000) return {items: [...found.values()].slice(0, 1000), coverage: 'discovered-only', stopped: '1000-link limit'};
-      stable = found.size === size ? stable + 1 : 0;
-      if (stable >= 4) break;
-      for (const node of scrollables) node.scrollTop = node.scrollHeight;
-      await new Promise(resolve => setTimeout(resolve, 400));
+  return threadkeepDiscover(document, location.href);
+}
+async function threadkeepDiscover(doc, href, pause = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const found = new Map(), original = new Map(); let stable = 0, stopped = 'scan-limit';
+  const collect = () => { for (const item of threadkeepLinks(doc, href)) found.set(item.url, item); };
+  // Walk ancestors of actual history links: scroll viewports can sit OUTSIDE nav/aside.
+  // Recompute each round because providers replace their sidebar during pagination.
+  const viewports = () => {
+    const candidates = new Set(doc.querySelectorAll('nav, aside, [role="navigation"], [data-radix-scroll-area-viewport]'));
+    for (const a of doc.querySelectorAll('a[href]')) {
+      if (!threadkeepLinks({querySelectorAll: () => [a]}, href).length) continue;
+      for (let node = a.parentElement; node; node = node.parentElement) candidates.add(node);
     }
-  } finally { scrollables.forEach((node, i) => node.scrollTop = original[i]); }
-  return {items: [...found.values()], coverage: 'discovered-only', stopped: 'bounded DOM scan; full account coverage unverified'};
+    return [...candidates].filter(node => node.clientHeight > 0 && node.scrollHeight > node.clientHeight + 2 && /auto|scroll|overlay/.test(getComputedStyle(node).overflowY));
+  };
+  try {
+    collect();
+    for (let round = 0; round < 90; round++) {
+      const size = found.size, scrollables = viewports(); let moved = false;
+      for (const node of scrollables) {
+        if (!original.has(node)) { original.set(node, node.scrollTop); node.scrollTop = 0; collect(); }
+        const before = node.scrollTop;
+        // Overlapping steps retain links in virtualized lists; jumping to the end loses them.
+        node.scrollTop = Math.min(node.scrollHeight - node.clientHeight, before + Math.max(1, node.clientHeight * .8));
+        moved ||= node.scrollTop > before + 1;
+      }
+      await pause(600); collect();
+      if (found.size >= 1000) { stopped = '1000-link limit'; break; }
+      stable = !moved && found.size === size ? stable + 1 : 0;
+      if (stable >= 8) { stopped = scrollables.length ? 'loaded-history-end' : 'no-history-scroll-container'; break; }
+    }
+  } finally { for (const [node, position] of original) node.scrollTop = position; }
+  return {items: [...found.values()].slice(0, 1000), coverage: 'discovered-only', stopped};
 }

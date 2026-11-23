@@ -16,7 +16,7 @@ const formatDate = value => value ? new Date(value).toLocaleDateString(localeFor
 function localizeStatic() {
   document.documentElement.lang = language; document.title = t('Threadkeep — Your AI library'); $('language').value = language;
   for (const [selector, key, attribute] of staticBindings) { const node = document.querySelector(selector); if (node) attribute ? node.setAttribute(attribute, t(key)) : node.textContent = t(key); }
-  $('version-label').textContent = `v0.4.0 · ${t('Open source')} · MIT`;
+  $('version-label').textContent = `v0.4.1 · ${t('Open source')} · MIT`;
   const headings = $('info').querySelectorAll('h3'), paragraphs = $('info').querySelectorAll(':scope > p');
   guideKeys.forEach(([heading, paragraph], i) => { headings[i].textContent = t(heading); paragraphs[i].textContent = t(paragraph); });
 }
