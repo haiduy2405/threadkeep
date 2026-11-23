@@ -1,9 +1,11 @@
 import {SCHEMA_VERSION, parseExport, mergeConversations, filterConversations, activeMessages, allMessages, toMarkdown, toHandoff, validateBackup, archiveCandidates, updateConversationState} from './core.js';
 import {readLibrary, saveLibrary} from './storage.js';
 import {resolveLanguage, localeFor, translator, errorText, staticBindings, guideKeys} from './i18n.js';
+import {normalizeCaptureBatch} from './capture.js';
 let savedLanguage;
 try { savedLanguage = localStorage.getItem('threadkeep-language'); } catch { /* Optional preference storage. */ }
 let language = resolveLanguage(savedLanguage, navigator.languages || [navigator.language]), t = translator(language), currentReader = null;
+let extensionVersion = '', pendingCapture = null;
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let state = {chats: [], projects: [], settings: {autoArchive: false, archiveDays: 90}}, view = {query: '', provider: 'all', sort: 'recent', status: 'active'}, selected = new Set(), busy = false, storageReady = false;
@@ -13,7 +15,7 @@ const formatDate = value => value ? new Date(value).toLocaleDateString(localeFor
 function localizeStatic() {
   document.documentElement.lang = language; document.title = t('Threadkeep — Your AI library'); $('language').value = language;
   for (const [selector, key, attribute] of staticBindings) { const node = document.querySelector(selector); if (node) attribute ? node.setAttribute(attribute, t(key)) : node.textContent = t(key); }
-  $('version-label').textContent = `v0.2.0 · ${t('Open source')} · MIT`;
+  $('version-label').textContent = `v0.3.0 · ${t('Open source')} · MIT`;
   const headings = $('info').querySelectorAll('h3'), paragraphs = $('info').querySelectorAll(':scope > p');
   guideKeys.forEach(([heading, paragraph], i) => { headings[i].textContent = t(heading); paragraphs[i].textContent = t(paragraph); });
 }
@@ -63,7 +65,7 @@ function render() {
   $('conversations').replaceChildren();
   if (!chats.length) {
     const empty = el('div', 'empty'); empty.append(el('div', 'empty-icon', state.chats.length ? '⌕' : '▤'), el('h2', '', t(state.chats.length ? 'No threads found.' : 'Good ideas deserve a home.')), el('p', '', t(state.chats.length ? 'Try a different search or filter.' : 'Bring your ChatGPT and Claude conversations together. Everything stays on your device.')));
-    if (!state.chats.length) { const b = el('button', 'primary', t('Import your first conversations')); b.onclick = () => $('file-input').click(); empty.append(b); const demo = el('button', 'quiet', t('Or explore a sample library →')); demo.onclick = loadDemo; empty.append(demo); }
+    if (!state.chats.length) { const b = el('button', 'primary', t('Save from ChatGPT or Claude')); b.onclick = openCaptureSetup; empty.append(b); const demo = el('button', 'quiet', t('Or explore a sample library →')); demo.onclick = loadDemo; empty.append(demo); }
     $('conversations').append(empty);
   }
   for (const c of chats) {
@@ -79,8 +81,9 @@ function render() {
     const meta = el('div', 'meta'); meta.append(el('span', `provider-label ${c.provider}`, label(c.provider)), el('span', '', t('{count} messages', {count: sourceMessages.length})));
     if (c.leaves?.length > 1) meta.append(el('span', '', t('{count} branches', {count: c.leaves.length})));
     if (c.projectId) meta.append(el('span', 'project-tag', state.projects.find(p => p.id === c.projectId)?.name || ''));
+    if (c.captureScope) meta.append(el('span', 'project-tag', t('Rendered text capture')));
     body.append(meta); body.onclick = () => showReader(c, q ? c.leaves?.find(leaf => activeMessages(c, leaf).some(m => m.text.toLocaleLowerCase().includes(q))) : undefined);
-    const end = el('div', 'row-end'); end.append(el('time', '', formatDate(c.updatedAt)));
+    const end = el('div', 'row-end'); end.append(el('time', '', formatDate(c.updatedAt || c.capturedAt)));
     const star = el('button', `star ${c.starred ? 'on' : ''}`, c.starred ? '★' : '☆'); star.setAttribute('aria-label', t(c.starred ? 'Unstar {title}' : 'Star {title}', {title: c.title})); star.setAttribute('aria-pressed', String(!!c.starred)); star.onclick = () => mutate(next => { const chat = next.chats.find(x => x.id === c.id); if (chat) chat.starred = !chat.starred; }); end.append(star);
     row.append(check, icon, body, end); $('conversations').append(row);
   }
@@ -89,6 +92,7 @@ function showReader(c, leaf = c.activeLeaf) {
   currentReader = {chat: c, leaf};
   $('reader-title').textContent = c.title; $('reader-provider').textContent = label(c.provider);
   $('reader-meta').replaceChildren(el('p', '', t('Source ID: {id} · {date}', {id: c.sourceId, date: formatDate(c.updatedAt)})));
+  if (c.captureScope) $('reader-meta').append(el('p', '', t('Account label: {label}', {label: c.accountLabel})), el('p', '', t('Capture: rendered text only; hidden branches and media files are not included.')));
   if (c.provider === 'chatgpt') { const a = el('a', 'source-link', t('Open original conversation ↗')); a.href = `https://chatgpt.com/c/${encodeURIComponent(c.sourceId)}`; a.target = '_blank'; a.rel = 'noopener noreferrer'; $('reader-meta').append(a); }
   $('branch-controls').replaceChildren();
   if (c.leaves?.length > 1) {
@@ -121,7 +125,8 @@ async function loadDemo() {
   const titles = ['A quieter kind of productivity app', 'The world behind FarBound', 'A visual language for the brand', 'Turning scattered notes into a plan'];
   if (await mutate(next => { next.chats = mergeConversations(next.chats, titles.map((title, i) => ({id: `demo:${i}`, sourceId: `sample-${i}`, title, provider: 'demo', updatedAt: new Date(Date.UTC(2026, 10, 22 - i)).toISOString(), messages: [{id: `demo-${i}-1`, role: 'user', text: ['I want a private workspace that helps me find my best ideas and continue across AI tools.', 'Let’s explore a fantasy world with meaningful exploration and a strong visual identity.', 'Build a calm, readable identity with warm neutrals and a single accent color.', 'Help me organize these notes into goals, decisions, and next steps.'][i]}, {id: `demo-${i}-2`, role: 'assistant', text: 'This is fictional demo content. Try searching, starring a conversation, creating a project, or exporting a handoff. No real account data has been accessed.'}]}))).chats; })) notice(t('Sample library added. Demo conversations are clearly labeled.'));
 }
-$('import').onclick = () => $('file-input').click();
+$('import').onclick = openCaptureSetup;
+$('advanced-import').onclick = () => $('file-input').click();
 $('file-input').onchange = async e => { await importFiles([...e.target.files]); e.target.value = ''; };
 $('demo').onclick = loadDemo;
 $('all-nav').onclick = () => navigate();
@@ -169,6 +174,7 @@ $('language').onchange = e => {
   language = resolveLanguage(e.target.value); t = translator(language); let persisted = true;
   try { localStorage.setItem('threadkeep-language', language); } catch { persisted = false; }
   localizeStatic(); render(); if ($('reader').open && currentReader) showReader(currentReader.chat, currentReader.leaf);
+  updateExtensionState(); if (pendingCapture) renderCapturePreview();
   if ($('archive-dialog').open && archivePreview) previewArchive();
   notice(t(persisted ? 'Language changed. Your conversations stay in their original language.' : 'Language changed for this tab. Browser settings prevented saving your preference.'));
 };
@@ -208,3 +214,47 @@ $('archive-apply').onclick = async () => {
   })) { $('archive-dialog').close(); resetArchivePreview(); notice(t('Archive settings saved. {count} conversations archived.', {count: archived})); }
 };
 setInterval(autoArchive, 60000);
+
+function bridge(message) { window.postMessage({channel: 'threadkeep-app', ...message}, location.origin); }
+function updateExtensionState() { $('extension-state').textContent = extensionVersion ? t('Extension connected: {version}', {version: extensionVersion}) : t('The extension is not detected in this tab. After installing it, reload this page.'); }
+function openCaptureSetup() {
+  if (pendingCapture) { renderCapturePreview(); if (!$('capture-review').open) $('capture-review').showModal(); }
+  else { updateExtensionState(); $('connect-dialog').showModal(); bridge({type: 'READY'}); }
+}
+function renderCapturePreview() {
+  if (!pendingCapture) return;
+  $('capture-summary').textContent = t('Review {count} captured conversations before adding them to this browser library.', {count: pendingCapture.chats.length});
+  $('capture-titles').replaceChildren(...pendingCapture.chats.map(c => el('li', '', `${c.title} · ${label(c.provider)} · ${c.accountLabel} · ${c.messages.length}`)));
+}
+$('close-connect').onclick = () => $('connect-dialog').close();
+$('capture-later').onclick = () => $('capture-review').close();
+$('capture-confirm').onclick = async () => {
+  if (!pendingCapture) return;
+  const capture = pendingCapture; let counts;
+  $('capture-confirm').disabled = true;
+  try {
+    const saved = await mutate(next => {
+      if (next.captureReceipts?.includes(capture.id)) { counts = {added: 0, updated: 0, skipped: capture.chats.length}; return; }
+      counts = mergeConversations(next.chats, capture.chats); next.chats = counts.chats;
+      next.captureReceipts = [...(next.captureReceipts || []), capture.id].slice(-200);
+    });
+    if (saved) {
+      bridge({type: 'ACK', id: capture.id}); pendingCapture = null; $('capture-review').close();
+      notice(t('Captured: {count} new, {updated} refreshed, {skipped} older or shorter copies skipped.', {count: counts.added, updated: counts.updated, skipped: counts.skipped}));
+    }
+  } finally { $('capture-confirm').disabled = false; }
+};
+window.addEventListener('message', event => {
+  if (event.source !== window || event.origin !== location.origin || event.data?.channel !== 'threadkeep-extension') return;
+  if (event.data.type === 'CONNECTED' && typeof event.data.version === 'string' && /^\d+\.\d+\.\d+$/.test(event.data.version)) { extensionVersion = event.data.version; updateExtensionState(); }
+  if (event.data.type !== 'CAPTURE_BATCH' || !storageReady) return;
+  try {
+    const batch = event.data.batch, chats = normalizeCaptureBatch(batch);
+    if (state.captureReceipts?.includes(batch.id)) { bridge({type: 'ACK', id: batch.id}); notice(t('Capture was already saved.')); return; }
+    if (pendingCapture?.id === batch.id) return;
+    pendingCapture = {id: batch.id, chats}; renderCapturePreview();
+    if ($('connect-dialog').open) $('connect-dialog').close();
+    if (!document.querySelector('dialog[open]')) $('capture-review').showModal();
+  } catch (error) { notice(errorText(error, t), true); }
+});
+updateExtensionState(); bridge({type: 'READY'});

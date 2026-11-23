@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Threadkeep Capture",
+  "version": "0.3.0",
+  "description": "Save a ChatGPT or Claude conversation, or select from discovered history, directly into your local Threadkeep library.",
+  "minimum_chrome_version": "109",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*"],
+  "action": {"default_title": "Save to Threadkeep"},
+  "background": {"service_worker": "background.js", "type": "module"},
+  "content_scripts": [{
+    "matches": ["https://haiduy2405.github.io/threadkeep/*", "http://127.0.0.1:4317/*"],
+    "js": ["bridge.js"], "run_at": "document_idle"
+  }]
+}

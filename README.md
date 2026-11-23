@@ -25,7 +25,13 @@ npm run check
 
 The app is static HTML, CSS and ES modules. The local server uses only Node built-ins and binds to loopback. There is no build step.
 
-## What works in v0.2
+## What works in v0.3
+
+- **Experimental Threadkeep Capture extension**: save the currently open ChatGPT/Claude conversation, or discover links in loaded history and select individual conversations / all discovered conversations. [Download ZIP](https://haiduy2405.github.io/threadkeep/downloads/threadkeep-extension-v0.3.0.zip) · [Install guide](extension/README.md).
+- A user-reviewed handoff from the extension to the web library through local browser messaging. Captures include source URLs, capture time, a user-declared account label and explicit coverage limits. No provider login credentials or cookies are requested.
+- The primary button is **Save from AI**. JSON export import remains under **Advanced** until provider capture is validated; library backup/restore remains separate.
+
+**Capture beta limitations:** adapters have synthetic tests but have not been verified against signed-in live accounts. They capture rendered text only, not unseen branches or media bytes. Scanning finds links the page exposes; it does not prove whole-account completeness. Up to 100 conversations / 8 MB per batch, 2 MB per conversation. Shorter or older recaptures cannot replace richer captures. Full JSON-export records remain separate. An extension installation and per-provider permission for bulk reading are required.
 
 - English / Tiếng Việt interface, including help, accessible labels, notifications, dates, Markdown labels and handoff templates. The initial language follows the first supported browser preference; manual choice is remembered on this browser. Conversation content is never automatically translated.
 - Reversible local archive and trash, with bulk actions and separate views. Reimport preserves local organization. Trash is retained in backups and is not automatically purged.
@@ -63,7 +69,7 @@ Only text and metadata are normalized. Images, uploads, generated files, shared 
 
 Handoffs are **not AI-generated summaries**. They include up to six recent active-branch messages per selected conversation, up to 3,000 characters per message and 24,000 excerpt characters per packet; truncation is labeled. Review and fill the checklist before sharing. Source conversations are untrusted content.
 
-No account synchronization, media-file import, ZIP import, semantic search, remote deletion, or restoration into ChatGPT/Claude accounts is implemented. Local trash/archive actions affect only your Threadkeep copy. The app never requests cookies or provider login credentials. See the [integration plan](docs/INTEGRATIONS.md) for the next milestones.
+No verified whole-account synchronization, media-file import, export-ZIP import, semantic search, remote deletion, or restoration into ChatGPT/Claude accounts is implemented. Local trash/archive actions affect only your Threadkeep copy. The app never requests cookies or provider login credentials. See the [integration plan](docs/INTEGRATIONS.md) for the next milestones.
 
 ## Architecture
 
@@ -72,11 +78,17 @@ No account synchronization, media-file import, ZIP import, semantic search, remo
 | `src/core.js` | Provider parsers, branch traversal, deduplication, filtering, Markdown and handoff exports, backup validation |
 | `src/storage.js` | Atomic IndexedDB persistence |
 | `src/i18n.js` | English/Vietnamese strings, locale selection and translation helpers |
+| `src/capture.js` | Bounded capture validation and account-separated source normalization |
+| `extension/` | Chromium Manifest V3 capture manager, DOM adapters and app bridge |
+| `scripts/package-extension.mjs` | Reproducible dependency-free unpacked extension ZIP |
 | `src/app.js` | UI and cross-tab coordination |
 | `scripts/serve.mjs` | Dependency-free loopback static server with security headers |
 | `test/core.test.js` | Synthetic parser, provenance, corruption and export tests |
 | `test/library.test.js` | Language coverage, localized exports, reversible actions and archive rules |
 | `test/server.test.js` | Browser asset serving and server boundaries |
+| `test/capture.test.js` | Capture validation, quotas, reimports, backup provenance and extension sender boundaries |
+
+To run browser DOM fixture checks locally, set `THREADKEEP_TEST=1` before `npm start` and open `/test/fixtures/dom-reader.html`. To simulate an extension delivery using fictional data, open `/?simulate-capture=1` under that test-only server. These fixtures do not establish compatibility with signed-in live providers. An ordinary server does not serve the fixture routes or inject the simulator.
 
 New providers should normalize into a namespaced ID, provider, source ID, title, timestamps, messages, and raw source. Add synthetic compatibility fixtures and tests before wiring them into the UI.
 

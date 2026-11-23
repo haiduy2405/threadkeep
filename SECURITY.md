@@ -5,3 +5,5 @@ Do not post private exports, tokens, cookies or backup files in public issues. R
 This alpha has not had an independent security audit. Backups are unencrypted. Imported conversations may contain malicious instructions: treat them as data and review handoffs before sending them to an AI.
 
 The app does not need provider credentials. Never supply them in an issue or pull request. A hosted fork can modify the app; review the source and use a trusted deployment or run your own copy.
+
+The optional capture extension has not undergone an independent audit or signed-in live-account validation. It requests provider permissions for bulk reads and retains one pending batch in extension-local storage until the app acknowledges durable import. Account labels are user-declared, not authenticated identities. Only the configured Threadkeep origin/path may receive a batch; captured content must be reviewed before saving. Neither a source URL nor a text-only capture proves a full media backup.

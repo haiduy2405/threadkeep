@@ -14,6 +14,16 @@
 - [x] User-enabled auto archive with a concrete preview, protected stars and bounded date policy
 - [x] Mobile access to project creation and library actions
 
+## 0.3 — Extension capture beta
+- [x] Current-conversation capture manager with English/Vietnamese controls
+- [x] Discover history links; select individual items or all discovered, with coverage warnings
+- [x] Optional provider permissions, bounded sequential capture and per-item errors
+- [x] Local app bridge, explicit preview, durable acknowledgement and pending-batch retention
+- [x] Namespaced account labels and capture-vs-export separation
+- [x] Downloadable unpacked extension ZIP and installation instructions
+- [ ] Signed-in live-account validation for ChatGPT and Claude
+- [ ] Verified entire-account enumeration, projects and archived-history coverage
+
 ## Next — Real-export compatibility and usability
 - [ ] Test with consenting users' redacted real-world export structures
 - [ ] ZIP import with decompression limits and clear asset coverage
