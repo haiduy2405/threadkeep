@@ -21,7 +21,11 @@ Open WebUI is a chat UI that can use local or cloud models; the adapter does not
 
 ## Muse
 
-Duy requested “Muse”; the exact service has not yet been identified. Its adapter remains unimplemented pending a URL or full product name. Do not silently substitute a similarly named product.
+Duy confirmed https://muse.ai/ on 2026-11-23. The official site currently identifies it as **Muse, Your Personal AI Agent from Meta**. Its product design describes a long-running main chat plus side chats. The authenticated conversation interface, source IDs/URLs and DOM author roles have not yet been inspected; the current browser session is at the sign-in screen.
+
+The Muse adapter remains unimplemented pending a user-selected, non-sensitive signed-in sample. Do not add an enabled provider button, invent conversation routes, or call a guessed private API just to report it as supported. Capture should treat the main chat and side chats as separate sources after verifying how they are identified. Muse activity logs, connected email/calendar data, cloud-computer files and rich artifacts are separate from chat text and are outside a transcript-only adapter unless explicitly implemented and selected by the user.
+
+Evidence: https://muse.ai/ and https://muse.ai/blog/how-we-designed-muse (official product-design article dated 2026-09-08; reviewed 2026-11-23).
 
 ## Sources reviewed
 

@@ -31,7 +31,8 @@
 - [x] Provider-aware URL validation, filtering, source links and backup round trips
 - [x] Reject ambiguous authors instead of guessing roles
 - [ ] Signed-in live validation for every provider; robust DeepSeek/Grok DOM support
-- [ ] Muse identification (awaiting product URL/name)
+- [x] Muse identified as https://muse.ai/ (Meta); official main-chat/side-chat design reviewed
+- [ ] Muse adapter: inspect a user-selected signed-in sample, establish source identities and author roles, then add fixture-backed capture
 
 ## Next — Real-export compatibility and usability
 - [ ] Test with consenting users' redacted real-world export structures
