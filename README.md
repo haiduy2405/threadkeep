@@ -4,6 +4,10 @@
 
 A private, local-first library for ChatGPT and Claude conversation exports. No account, API key, analytics, cloud database, or runtime dependencies. An early open-source alpha, built by Duy / duyluma.
 
+**[Open the live alpha](https://haiduy2405.github.io/threadkeep/)** · [Report a bug](https://github.com/haiduy2405/threadkeep/issues)
+
+The live site stores conversations in your own browser, not in the public repository. Prefer running your own copy for sensitive archives. Storage on the live site and on localhost is separate; use library backups to transfer it.
+
 ## Run
 
 Install Node.js 22 or later, then:
