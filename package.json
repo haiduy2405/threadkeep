@@ -1,10 +1,10 @@
 {
   "name": "threadkeep",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "A private, local-first conversation library for ChatGPT and Claude.",
   "license": "MIT",
-  "scripts": { "start": "node scripts/serve.mjs", "test": "node --test", "check": "node --check src/app.js && node --check src/core.js" },
+  "scripts": { "start": "node scripts/serve.mjs", "test": "node --test", "check": "node --check src/app.js && node --check src/core.js && node --check src/i18n.js" },
   "engines": { "node": ">=22" }
 }

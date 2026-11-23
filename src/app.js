@@ -1,23 +1,34 @@
-import {SCHEMA_VERSION, parseExport, mergeConversations, filterConversations, activeMessages, allMessages, toMarkdown, toHandoff, validateBackup} from './core.js';
+import {SCHEMA_VERSION, parseExport, mergeConversations, filterConversations, activeMessages, allMessages, toMarkdown, toHandoff, validateBackup, archiveCandidates, updateConversationState} from './core.js';
 import {readLibrary, saveLibrary} from './storage.js';
+import {resolveLanguage, localeFor, translator, errorText, staticBindings, guideKeys} from './i18n.js';
+let savedLanguage;
+try { savedLanguage = localStorage.getItem('threadkeep-language'); } catch { /* Optional preference storage. */ }
+let language = resolveLanguage(savedLanguage, navigator.languages || [navigator.language]), t = translator(language), currentReader = null;
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
-let state = {chats: [], projects: []}, view = {query: '', provider: 'all', sort: 'recent'}, selected = new Set(), busy = false, storageReady = false;
+let state = {chats: [], projects: [], settings: {autoArchive: false, archiveDays: 90}}, view = {query: '', provider: 'all', sort: 'recent', status: 'active'}, selected = new Set(), busy = false, storageReady = false;
 const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('threadkeep-library') : null;
-const label = provider => ({chatgpt: 'ChatGPT', claude: 'Claude', demo: 'Demo'}[provider] || provider);
-const formatDate = value => value ? new Date(value).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'}) : 'Date unknown';
+const label = provider => ({chatgpt: 'ChatGPT', claude: 'Claude', demo: t('Demo')}[provider] || provider);
+const formatDate = value => value ? new Date(value).toLocaleDateString(localeFor(language), {month: 'short', day: 'numeric', year: 'numeric'}) : t('Date unknown');
+function localizeStatic() {
+  document.documentElement.lang = language; document.title = t('Threadkeep — Your AI library'); $('language').value = language;
+  for (const [selector, key, attribute] of staticBindings) { const node = document.querySelector(selector); if (node) attribute ? node.setAttribute(attribute, t(key)) : node.textContent = t(key); }
+  $('version-label').textContent = `v0.2.0 · ${t('Open source')} · MIT`;
+  const headings = $('info').querySelectorAll('h3'), paragraphs = $('info').querySelectorAll(':scope > p');
+  guideKeys.forEach(([heading, paragraph], i) => { headings[i].textContent = t(heading); paragraphs[i].textContent = t(paragraph); });
+}
 let noticeTimer;
 function notice(message, error = false) { $('status').textContent = message; $('status').className = error ? 'show error' : 'show'; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('status').className = '', 9000); }
 async function mutate(change) {
-  if (!storageReady) return notice('Storage is unavailable. Reload in a browser with IndexedDB enabled.', true);
-  if (busy) return notice('Please wait for the current operation.');
+  if (!storageReady) return notice(t('Storage is unavailable. Reload in a browser with IndexedDB enabled.'), true);
+  if (busy) return notice(t('Please wait for the current operation.'));
   busy = true;
   try {
-    const commit = async () => { const next = structuredClone(await readLibrary()); await change(next); await saveLibrary(next); state = next; channel?.postMessage('changed'); render(); return true; };
+    const commit = async () => { const next = structuredClone(await readLibrary()); next.settings ||= {autoArchive: false, archiveDays: 90}; await change(next); await saveLibrary(next); state = next; channel?.postMessage('changed'); render(); return true; };
     if (!navigator.locks) throw new Error('This browser needs Web Locks support; use a current Chrome, Edge, Firefox or Safari');
     return await navigator.locks.request('threadkeep-write', commit);
   }
-  catch (error) { notice(`Could not save changes: ${error.message}. Your existing library was kept.`, true); return false; }
+  catch (error) { notice(t('Could not save changes: {error}. Your existing library was kept.', {error: errorText(error, t)}), true); return false; }
   finally { busy = false; }
 }
 function download(name, text, type = 'text/markdown') {
@@ -25,67 +36,73 @@ function download(name, text, type = 'text/markdown') {
   const a = el('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function render() {
-  $('total').textContent = state.chats.length;
-  $('stat-chats').textContent = state.chats.length.toLocaleString();
-  $('stat-messages').textContent = state.chats.reduce((sum, c) => sum + allMessages(c).length, 0).toLocaleString();
+  const active = state.chats.filter(c => !c.archived && !c.trashedAt);
+  $('total').textContent = active.length;
+  $('archive-count').textContent = state.chats.filter(c => c.archived && !c.trashedAt).length;
+  $('trash-count').textContent = state.chats.filter(c => c.trashedAt).length;
+  $('stat-chats').textContent = state.chats.filter(c => !c.trashedAt).length.toLocaleString(localeFor(language));
+  $('stat-messages').textContent = state.chats.filter(c => !c.trashedAt).reduce((sum, c) => sum + allMessages(c).length, 0).toLocaleString(localeFor(language));
   $('stat-projects').textContent = state.projects.length;
   $('projects').replaceChildren();
   for (const p of state.projects) {
-    const b = el('button', `nav ${view.projectId === p.id ? 'active' : ''}`); b.append(el('span', 'project-dot', '●'), el('span', '', p.name), el('b', '', state.chats.filter(c => c.projectId === p.id).length));
-    b.onclick = () => { view.projectId = p.id; view.starred = false; selected.clear(); render(); }; $('projects').append(b);
+    const b = el('button', `nav ${view.projectId === p.id ? 'active' : ''}`); b.append(el('span', 'project-dot', '●'), el('span', '', p.name), el('b', '', active.filter(c => c.projectId === p.id).length));
+    b.onclick = () => navigate('active', false, p.id); $('projects').append(b);
   }
-  $('all-nav').classList.toggle('active', !view.projectId && !view.starred);
+  $('all-nav').classList.toggle('active', view.status === 'active' && !view.projectId && !view.starred);
   $('star-nav').classList.toggle('active', !!view.starred);
-  const name = view.projectId ? state.projects.find(p => p.id === view.projectId)?.name : view.starred ? 'Starred' : 'All conversations';
-  $('crumb').textContent = name; $('heading').textContent = view.projectId ? name : view.starred ? 'The threads that matter.' : 'Your ideas, kept together.';
-  $('assign').replaceChildren(new Option('Move to project…', ''), new Option('Unassigned', '__none__'), ...state.projects.map(p => new Option(p.name, p.id)));
-  const chats = filterConversations(state.chats, view);
+  $('archive-nav').classList.toggle('active', view.status === 'archived'); $('trash-nav').classList.toggle('active', view.status === 'trash');
+  const name = view.projectId ? state.projects.find(p => p.id === view.projectId)?.name : t(view.status === 'trash' ? 'Trash' : view.status === 'archived' ? 'Archived' : view.starred ? 'Starred' : 'All conversations');
+  $('crumb').textContent = name; $('heading').textContent = view.projectId || view.status !== 'active' ? name : t(view.starred ? 'The threads that matter.' : 'Your ideas, kept together.');
+  $('assign').replaceChildren(new Option(t('Move to project…'), ''), new Option(t('Unassigned'), '__none__'), ...state.projects.map(p => new Option(p.name, p.id)));
+  const chats = filterConversations(state.chats, {...view, locale: localeFor(language)});
   const visible = new Set(chats.map(c => c.id)); selected = new Set([...selected].filter(id => visible.has(id)));
-  $('result-count').textContent = `${chats.length} CONVERSATION${chats.length === 1 ? '' : 'S'}`;
-  $('selection-count').textContent = selected.size ? `${selected.size} selected` : 'Select conversations to export a handoff';
-  $('bulk').hidden = !selected.size; $('bulk-count').textContent = `${selected.size} selected`;
+  $('result-count').textContent = t(chats.length === 1 ? '{count} CONVERSATION' : '{count} CONVERSATIONS', {count: chats.length});
+  $('selection-count').textContent = selected.size ? t('{count} selected', {count: selected.size}) : t('Select conversations to export a handoff');
+  $('bulk').hidden = !selected.size; $('bulk-count').textContent = t('{count} selected', {count: selected.size});
+  $('archive-selected').hidden = view.status !== 'active'; $('unarchive-selected').hidden = view.status !== 'archived'; $('trash-selected').hidden = view.status === 'trash'; $('restore-selected').hidden = view.status !== 'trash';
   $('conversations').replaceChildren();
   if (!chats.length) {
-    const empty = el('div', 'empty'); empty.append(el('div', 'empty-icon', state.chats.length ? '⌕' : '▤'), el('h2', '', state.chats.length ? 'No threads found.' : 'Good ideas deserve a home.'), el('p', '', state.chats.length ? 'Try a different search or filter.' : 'Bring your ChatGPT and Claude conversations together. Everything stays on your device.'));
-    if (!state.chats.length) { const b = el('button', 'primary', 'Import your first conversations'); b.onclick = () => $('file-input').click(); empty.append(b); const demo = el('button', 'quiet', 'Or explore a sample library →'); demo.onclick = loadDemo; empty.append(demo); }
+    const empty = el('div', 'empty'); empty.append(el('div', 'empty-icon', state.chats.length ? '⌕' : '▤'), el('h2', '', t(state.chats.length ? 'No threads found.' : 'Good ideas deserve a home.')), el('p', '', t(state.chats.length ? 'Try a different search or filter.' : 'Bring your ChatGPT and Claude conversations together. Everything stays on your device.')));
+    if (!state.chats.length) { const b = el('button', 'primary', t('Import your first conversations')); b.onclick = () => $('file-input').click(); empty.append(b); const demo = el('button', 'quiet', t('Or explore a sample library →')); demo.onclick = loadDemo; empty.append(demo); }
     $('conversations').append(empty);
   }
   for (const c of chats) {
     const row = el('article', 'conversation');
-    const check = el('input'); check.type = 'checkbox'; check.checked = selected.has(c.id); check.setAttribute('aria-label', `Select ${c.title}`); check.onchange = () => { check.checked ? selected.add(c.id) : selected.delete(c.id); render(); };
+    const check = el('input'); check.type = 'checkbox'; check.checked = selected.has(c.id); check.setAttribute('aria-label', t('Select {title}', {title: c.title})); check.onchange = () => { check.checked ? selected.add(c.id) : selected.delete(c.id); render(); };
     const icon = el('span', `provider-icon ${c.provider}`, c.provider === 'chatgpt' ? '✳' : c.provider === 'claude' ? '✴' : '◇');
     const body = el('button', 'conversation-body'); body.append(el('h3', '', c.title));
     const sourceMessages = allMessages(c);
     const q = view.query.toLocaleLowerCase().trim().split(/\s+/)[0];
     const preview = (q && sourceMessages.find(m => m.text.toLocaleLowerCase().includes(q))) || activeMessages(c).find(m => m.role === 'user') || sourceMessages[0];
-    const text = preview?.text || 'No text messages'; const pos = q ? Math.max(0, text.toLocaleLowerCase().indexOf(q) - 50) : 0;
+    const text = preview?.text || t('No text messages'); const pos = q ? Math.max(0, text.toLocaleLowerCase().indexOf(q) - 50) : 0;
     body.append(el('p', '', (pos ? '…' : '') + text.slice(pos, pos + 190)));
-    const meta = el('div', 'meta'); meta.append(el('span', `provider-label ${c.provider}`, label(c.provider)), el('span', '', `${sourceMessages.length} messages`));
-    if (c.leaves?.length > 1) meta.append(el('span', '', `${c.leaves.length} branches`));
+    const meta = el('div', 'meta'); meta.append(el('span', `provider-label ${c.provider}`, label(c.provider)), el('span', '', t('{count} messages', {count: sourceMessages.length})));
+    if (c.leaves?.length > 1) meta.append(el('span', '', t('{count} branches', {count: c.leaves.length})));
     if (c.projectId) meta.append(el('span', 'project-tag', state.projects.find(p => p.id === c.projectId)?.name || ''));
     body.append(meta); body.onclick = () => showReader(c, q ? c.leaves?.find(leaf => activeMessages(c, leaf).some(m => m.text.toLocaleLowerCase().includes(q))) : undefined);
     const end = el('div', 'row-end'); end.append(el('time', '', formatDate(c.updatedAt)));
-    const star = el('button', `star ${c.starred ? 'on' : ''}`, c.starred ? '★' : '☆'); star.setAttribute('aria-label', `${c.starred ? 'Unstar' : 'Star'} ${c.title}`); star.setAttribute('aria-pressed', String(!!c.starred)); star.onclick = () => mutate(next => { const chat = next.chats.find(x => x.id === c.id); chat.starred = !chat.starred; }); end.append(star);
+    const star = el('button', `star ${c.starred ? 'on' : ''}`, c.starred ? '★' : '☆'); star.setAttribute('aria-label', t(c.starred ? 'Unstar {title}' : 'Star {title}', {title: c.title})); star.setAttribute('aria-pressed', String(!!c.starred)); star.onclick = () => mutate(next => { const chat = next.chats.find(x => x.id === c.id); if (chat) chat.starred = !chat.starred; }); end.append(star);
     row.append(check, icon, body, end); $('conversations').append(row);
   }
 }
-function showReader(c, leaf) {
+function showReader(c, leaf = c.activeLeaf) {
+  currentReader = {chat: c, leaf};
   $('reader-title').textContent = c.title; $('reader-provider').textContent = label(c.provider);
-  $('reader-meta').replaceChildren(el('p', '', `Source ID: ${c.sourceId} · ${formatDate(c.updatedAt)}`));
-  if (c.provider === 'chatgpt') { const a = el('a', 'source-link', 'Open original conversation ↗'); a.href = `https://chatgpt.com/c/${encodeURIComponent(c.sourceId)}`; a.target = '_blank'; a.rel = 'noopener noreferrer'; $('reader-meta').append(a); }
+  $('reader-meta').replaceChildren(el('p', '', t('Source ID: {id} · {date}', {id: c.sourceId, date: formatDate(c.updatedAt)})));
+  if (c.provider === 'chatgpt') { const a = el('a', 'source-link', t('Open original conversation ↗')); a.href = `https://chatgpt.com/c/${encodeURIComponent(c.sourceId)}`; a.target = '_blank'; a.rel = 'noopener noreferrer'; $('reader-meta').append(a); }
   $('branch-controls').replaceChildren();
   if (c.leaves?.length > 1) {
-    const label = el('label', 'branch-label', 'Conversation branch '), picker = el('select');
-    c.leaves.forEach((id, i) => picker.add(new Option(`Branch ${i + 1}${id === c.activeLeaf ? ' · active' : ''}`, id))); picker.value = leaf || c.activeLeaf;
-    picker.onchange = () => renderMessages(c, picker.value); label.append(picker); $('branch-controls').append(label);
+    const label = el('label', 'branch-label', t('Conversation branch') + ' '), picker = el('select'); picker.setAttribute('aria-label', t('Conversation branch'));
+    c.leaves.forEach((id, i) => picker.add(new Option(t('Branch {count}', {count: i + 1}) + (id === c.activeLeaf ? t(' · active') : ''), id))); picker.value = leaf;
+    picker.onchange = () => { currentReader.leaf = picker.value; renderMessages(c, picker.value); }; label.append(picker); $('branch-controls').append(label);
   }
   renderMessages(c, leaf); if (!$('reader').open) $('reader').showModal();
 }
 function renderMessages(c, leaf) {
   $('messages').replaceChildren();
   for (const m of activeMessages(c, leaf)) {
-    const block = el('section', `message ${m.role === 'user' ? 'user' : ''}`); block.append(el('h4', '', m.role), el('pre', '', m.text));
-    if (m.attachmentCount) block.append(el('small', '', `${m.attachmentCount} attachment reference(s). Original files are not included.`));
+    const block = el('section', `message ${m.role === 'user' ? 'user' : ''}`); block.append(el('h4', '', t(m.role)), el('pre', '', m.text));
+    if (m.attachmentCount) block.append(el('small', '', t('{count} attachment reference(s). Original files are not included.', {count: m.attachmentCount})));
     $('messages').append(block);
   }
 }
@@ -93,22 +110,22 @@ async function importFiles(files) {
   const incoming = [], warnings = [];
   try {
     for (const file of files) {
-      if (file.size > 100 * 1024 * 1024) throw new Error(`${file.name} exceeds this alpha's 100 MB per-file limit.`);
+      if (file.size > 100 * 1024 * 1024) throw new Error(t('{name} exceeds this alpha\'s 100 MB per-file limit.', {name: file.name}));
       const result = parseExport(JSON.parse(await file.text())); incoming.push(...result.chats); warnings.push(...result.warnings);
     }
     let counts;
-    if (await mutate(next => { counts = mergeConversations(next.chats, incoming); next.chats = counts.chats; })) notice(`Imported: ${counts.added} new, ${counts.updated} refreshed, ${counts.skipped} older copies skipped.${warnings.length ? ` ${warnings.length} unsupported records skipped.` : ''}`);
-  } catch (error) { notice(`Import failed: ${error.message} No files from this batch were saved.`, true); }
+    if (await mutate(next => { counts = mergeConversations(next.chats, incoming); next.chats = counts.chats; })) notice(t('Imported: {added} new, {updated} refreshed, {skipped} older copies skipped.', counts) + (warnings.length ? t(' {count} unsupported records skipped.', {count: warnings.length}) : ''));
+  } catch (error) { notice(t('Import failed: {error} No files from this batch were saved.', {error: errorText(error, t)}), true); }
 }
 async function loadDemo() {
   const titles = ['A quieter kind of productivity app', 'The world behind FarBound', 'A visual language for the brand', 'Turning scattered notes into a plan'];
-  if (await mutate(next => { next.chats = mergeConversations(next.chats, titles.map((title, i) => ({id: `demo:${i}`, sourceId: `sample-${i}`, title, provider: 'demo', updatedAt: new Date(Date.UTC(2026, 10, 22 - i)).toISOString(), messages: [{id: `demo-${i}-1`, role: 'user', text: ['I want a private workspace that helps me find my best ideas and continue across AI tools.', 'Let’s explore a fantasy world with meaningful exploration and a strong visual identity.', 'Build a calm, readable identity with warm neutrals and a single accent color.', 'Help me organize these notes into goals, decisions, and next steps.'][i]}, {id: `demo-${i}-2`, role: 'assistant', text: 'This is fictional demo content. Try searching, starring a conversation, creating a project, or exporting a handoff. No real account data has been accessed.'}]}))).chats; })) notice('Sample library added. Demo conversations are clearly labeled.');
+  if (await mutate(next => { next.chats = mergeConversations(next.chats, titles.map((title, i) => ({id: `demo:${i}`, sourceId: `sample-${i}`, title, provider: 'demo', updatedAt: new Date(Date.UTC(2026, 10, 22 - i)).toISOString(), messages: [{id: `demo-${i}-1`, role: 'user', text: ['I want a private workspace that helps me find my best ideas and continue across AI tools.', 'Let’s explore a fantasy world with meaningful exploration and a strong visual identity.', 'Build a calm, readable identity with warm neutrals and a single accent color.', 'Help me organize these notes into goals, decisions, and next steps.'][i]}, {id: `demo-${i}-2`, role: 'assistant', text: 'This is fictional demo content. Try searching, starring a conversation, creating a project, or exporting a handoff. No real account data has been accessed.'}]}))).chats; })) notice(t('Sample library added. Demo conversations are clearly labeled.'));
 }
 $('import').onclick = () => $('file-input').click();
 $('file-input').onchange = async e => { await importFiles([...e.target.files]); e.target.value = ''; };
 $('demo').onclick = loadDemo;
-$('all-nav').onclick = () => { view.projectId = undefined; view.starred = false; selected.clear(); render(); };
-$('star-nav').onclick = () => { view.projectId = undefined; view.starred = true; selected.clear(); render(); };
+$('all-nav').onclick = () => navigate();
+$('star-nav').onclick = () => navigate('active', true);
 $('search').oninput = e => { view.query = e.target.value; render(); };
 $('provider').onchange = e => { view.provider = e.target.value; render(); };
 $('sort').onchange = e => { view.sort = e.target.value; render(); };
@@ -117,30 +134,77 @@ $('add-project').onclick = () => { $('project-name').value = ''; $('project-dial
 $('cancel-project').onclick = () => $('project-dialog').close();
 $('project-form').onsubmit = async e => {
   e.preventDefault(); const name = $('project-name').value.trim(); if (!name) return;
-  if (await mutate(next => { if (next.projects.some(p => p.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('A project with this name already exists'); next.projects.push({id: crypto.randomUUID(), name: name.slice(0, 120)}); })) { $('project-dialog').close(); notice('Project created. Select conversations to move them into it.'); }
+  if (await mutate(next => { if (next.projects.some(p => p.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('A project with this name already exists'); next.projects.push({id: crypto.randomUUID(), name: name.slice(0, 120)}); })) { $('project-dialog').close(); notice(t('Project created. Select conversations to move them into it.')); }
 };
-$('assign').onchange = async e => { const id = e.target.value; if (id) await mutate(next => { next.chats.forEach(c => { if (selected.has(c.id)) c.projectId = id === '__none__' ? null : id; }); }); };
-$('export-selected').onclick = () => download('threadkeep-conversations.md', toMarkdown(state.chats.filter(c => selected.has(c.id))));
-$('handoff').onclick = () => download('threadkeep-handoff.md', toHandoff(state.chats.filter(c => selected.has(c.id))));
+$('assign').onchange = async e => { const id = e.target.value; const ids = new Set(selected); if (id) await mutate(next => { next.chats.forEach(c => { if (ids.has(c.id)) c.projectId = id === '__none__' ? null : id; }); }); };
+$('export-selected').onclick = () => download('threadkeep-conversations.md', toMarkdown(state.chats.filter(c => selected.has(c.id)), language));
+$('handoff').onclick = () => download('threadkeep-handoff.md', toHandoff(state.chats.filter(c => selected.has(c.id)), 24000, language));
 $('backup').onclick = () => download(`threadkeep-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({format: 'threadkeep', schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(), ...state}, null, 2), 'application/json');
 $('restore').onclick = () => $('restore-input').click();
 $('restore-input').onchange = async e => {
   try {
     const file = e.target.files[0]; if (!file) return;
-    if (file.size > 100 * 1024 * 1024) throw new Error('Backup exceeds the 100 MB alpha limit.');
+    if (file.size > 100 * 1024 * 1024) throw new Error(t('Backup exceeds the 100 MB alpha limit.'));
     const restored = validateBackup(JSON.parse(await file.text()));
-    if (!confirm(`Replace this browser library (${state.chats.length} conversations) with ${restored.chats.length} conversations and ${restored.projects.length} projects? Export a backup first if you want to keep the current library.`)) return;
-    if (await mutate(next => { next.chats = restored.chats; next.projects = restored.projects; })) { selected.clear(); view.projectId = undefined; render(); notice('Library restored.'); }
-  } catch (error) { notice(`Restore failed: ${error.message}`, true); }
+    if (!confirm(t('Replace this browser library ({current} conversations) with {chats} conversations and {projects} projects? Export a backup first if you want to keep the current library.', {current: state.chats.length, chats: restored.chats.length, projects: restored.projects.length}))) return;
+    restored.settings.autoArchive = false;
+    if (await mutate(next => { next.chats = restored.chats; next.projects = restored.projects; next.settings = restored.settings; })) { navigate(); notice(t('Library restored.')); }
+  } catch (error) { notice(t('Restore failed: {error}', {error: errorText(error, t)}), true); }
   finally { e.target.value = ''; }
 };
 $('help').onclick = () => $('info').showModal();
 $('close-info').onclick = () => $('info').close(); $('close-reader').onclick = () => $('reader').close();
-try { state = await readLibrary(); storageReady = true; render(); }
-catch (error) { render(); notice(`Browser storage is unavailable: ${error.message}`, true); }
+localizeStatic();
+try { state = await readLibrary(); state.settings ||= {autoArchive: false, archiveDays: 90}; storageReady = true; render(); await autoArchive(); }
+catch (error) { render(); notice(t('Browser storage is unavailable: {error}', {error: errorText(error, t)}), true); }
 window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); $('search').focus(); } });
 // A second tab must not overwrite a newer library with its stale in-memory copy.
 if (channel) {
   channel.onmessage = () => { if (!busy) readLibrary().then(data => { state = data; render(); }).catch(() => {}); };
 }
-window.addEventListener('focus', () => { if (!busy && storageReady) readLibrary().then(data => { state = data; render(); }).catch(() => {}); });
+window.addEventListener('focus', () => { if (!busy && storageReady) readLibrary().then(data => { state = data; render(); autoArchive(); }).catch(() => {}); });
+
+function navigate(status = 'active', starred = false, projectId) { Object.assign(view, {status, starred, projectId}); selected.clear(); render(); }
+$('language').onchange = e => {
+  language = resolveLanguage(e.target.value); t = translator(language); let persisted = true;
+  try { localStorage.setItem('threadkeep-language', language); } catch { persisted = false; }
+  localizeStatic(); render(); if ($('reader').open && currentReader) showReader(currentReader.chat, currentReader.leaf);
+  if ($('archive-dialog').open && archivePreview) previewArchive();
+  notice(t(persisted ? 'Language changed. Your conversations stay in their original language.' : 'Language changed for this tab. Browser settings prevented saving your preference.'));
+};
+$('archive-nav').onclick = () => navigate('archived'); $('trash-nav').onclick = () => navigate('trash');
+async function changeSelected(action) {
+  const ids = [...selected]; if (!ids.length) return;
+  if (await mutate(next => { next.chats = updateConversationState(next.chats, ids, action); })) notice(t('Conversations updated.'));
+}
+$('archive-selected').onclick = () => changeSelected('archive'); $('unarchive-selected').onclick = () => changeSelected('unarchive'); $('trash-selected').onclick = () => changeSelected('trash'); $('restore-selected').onclick = () => changeSelected('restore');
+let archivePreview = null;
+function resetArchivePreview() { archivePreview = null; $('archive-apply').disabled = true; $('archive-preview-result').textContent = ''; }
+function previewArchive() {
+  try {
+    const days = Number($('archive-days').value), candidates = archiveCandidates(state.chats, days);
+    archivePreview = {days, ids: candidates.map(c => c.id), enabled: $('archive-auto').checked};
+    $('archive-preview-result').textContent = t('Preview: {count} conversations will be archived. Starred conversations and trash are excluded.', {count: candidates.length}); $('archive-apply').disabled = false;
+  } catch (error) { resetArchivePreview(); notice(errorText(error, t), true); }
+}
+async function autoArchive() {
+  if (!storageReady || busy || !state.settings?.autoArchive || !archiveCandidates(state.chats, state.settings.archiveDays).length) return;
+  let archived = 0;
+  if (await mutate(next => {
+    if (!next.settings.autoArchive) return;
+    const candidates = archiveCandidates(next.chats, next.settings.archiveDays); archived = candidates.length;
+    next.chats = updateConversationState(next.chats, candidates.map(c => c.id), 'archive');
+  })) { if (archived) notice(t('Automatically archived {count} conversations.', {count: archived})); }
+}
+$('archive-settings').onclick = () => { $('archive-days').value = state.settings?.archiveDays || 90; $('archive-auto').checked = !!state.settings?.autoArchive; resetArchivePreview(); $('archive-dialog').showModal(); };
+$('archive-days').oninput = resetArchivePreview; $('archive-auto').onchange = resetArchivePreview; $('archive-preview').onclick = previewArchive; $('archive-cancel').onclick = () => $('archive-dialog').close();
+$('archive-apply').onclick = async () => {
+  if (!archivePreview) return;
+  const preview = archivePreview; let archived = 0;
+  if (await mutate(next => {
+    const eligible = new Set(archiveCandidates(next.chats, preview.days).map(c => c.id));
+    const ids = preview.ids.filter(id => eligible.has(id)); archived = ids.length;
+    next.settings = {autoArchive: preview.enabled, archiveDays: preview.days}; next.chats = updateConversationState(next.chats, ids, 'archive');
+  })) { $('archive-dialog').close(); resetArchivePreview(); notice(t('Archive settings saved. {count} conversations archived.', {count: archived})); }
+};
+setInterval(autoArchive, 60000);

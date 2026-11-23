@@ -12,10 +12,10 @@ const server = createServer(async (req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
     const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
-    if (relative !== 'index.html' && relative !== 'icon.svg' && !/^src\/[a-z-]+\.(js|css)$/.test(relative)) throw new Error('Not found');
+    if (relative !== 'index.html' && relative !== 'icon.svg' && !/^src\/[a-z0-9-]+\.(js|css)$/.test(relative)) throw new Error('Not found');
     const path = await realpath(resolve(root, relative));
     if (!path.startsWith(root + sep)) throw new Error('Not found');
     const data = await readFile(path); res.writeHead(200, {'Content-Type': types[extname(path)] || 'application/octet-stream'}); res.end(req.method === 'HEAD' ? undefined : data);
   } catch { res.writeHead(404); res.end('Not found'); }
 });
-server.listen(port, '127.0.0.1', () => console.log(`Threadkeep: http://127.0.0.1:${port}`));
+server.listen(port, '127.0.0.1', () => console.log(`Threadkeep: http://127.0.0.1:${server.address().port}`));
